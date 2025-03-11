@@ -3,39 +3,61 @@ using TMPro;
 using UnityEngine.XR.Hands;
 using UnityEngine.XR.Management;
 using System.IO;
+using System.Collections;
+using System.Text;
 
 public class HandTrackingJoints : MonoBehaviour
 {
-    public TextMeshProUGUI debugText; // Assign in Unity UI
+    [Header("UI Elements")]
+    public TextMeshProUGUI debugText;              // For hand tracking data/status
+    public TextMeshProUGUI countdownText;          // For countdown and progress display
+
     private XRHandSubsystem handSubsystem;
     private string downloadsFolder;
+    private string filePath;
+
+    [Header("Clap Detection Settings")]
+    public float clapDistanceThreshold = 0.1f;     // Distance to consider a clap (meters)
+    public float clapCooldown = 2.0f;              // Cooldown time between claps (seconds)
+
+    private bool isWaitingForDataCollection = false;
+    private float lastClapTime = -Mathf.Infinity;
+
+    [Header("Sampling Settings")]
+    public int numberOfSamples = 100;              // How many samples to collect after clap
+    public float sampleInterval = 0.2f;            // Interval between samples (now 0.2s)
+
+    private int clapIndex = 0;
 
     void Start()
     {
-        // Get the Hand Tracking Subsystem
         var loader = XRGeneralSettings.Instance?.Manager?.activeLoader;
         if (loader != null)
         {
             handSubsystem = loader.GetLoadedSubsystem<XRHandSubsystem>();
         }
 
-        // Get the system Downloads folder path (platform-independent)
         downloadsFolder = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile), "Downloads");
 
-        // Ensure the Downloads folder exists
         if (!Directory.Exists(downloadsFolder))
         {
             Directory.CreateDirectory(downloadsFolder);
         }
 
-        // Set up the path to save CSV file in Downloads
-        string filePath = Path.Combine(downloadsFolder, "hand_tracking_data.csv");
+        filePath = Path.Combine(downloadsFolder, "hand_tracking_data.csv");
 
-        // Optionally, if you want to create a new CSV with headers
-        if (!File.Exists(filePath))
+        // DELETE existing CSV file if it exists
+        if (File.Exists(filePath))
         {
-            File.WriteAllText(filePath, "Time,Hand,Joint,Position_X,Position_Y,Position_Z\n");
+            File.Delete(filePath);
+            Debug.Log("Existing CSV file deleted.");
         }
+
+        // Create a new CSV file with headers
+        File.WriteAllText(filePath, "ClapIndex,TimeStamp,Data\n");
+
+        UpdateCountdownText("Waiting for Clap...");
+        UpdateDebugText("");
     }
 
     void Update()
@@ -46,118 +68,164 @@ public class HandTrackingJoints : MonoBehaviour
             XRHand rightHand = handSubsystem.rightHand;
 
             string message = "Hand Tracking Active\n";
+            message += leftHand.isTracked ? "Left Hand: Tracked\n" : "Left Hand Not Tracked\n";
+            message += rightHand.isTracked ? "Right Hand: Tracked\n" : "Right Hand Not Tracked\n";
 
-            if (leftHand.isTracked)
-            {
-                message += "Left Hand:\n";
-                message += GetFingerData(leftHand, "Left");
-            }
-            else
-            {
-                message += "Left Hand Not Tracked\n";
-            }
+            UpdateDebugText(message);
 
-            if (rightHand.isTracked)
+            if (!isWaitingForDataCollection)
             {
-                message += "Right Hand:\n";
-                message += GetFingerData(rightHand, "Right");
-            }
-            else
-            {
-                message += "Right Hand Not Tracked\n";
-            }
-
-            debugText.text = message;
-
-            // If screenshot is taken, save hand data to CSV
-            if (Input.GetKeyDown(KeyCode.S))  // Press "S" to simulate taking a screenshot
-            {
-                SaveHandDataToCSV(leftHand, rightHand);
-                TakeScreenshot();
+                CheckForClap(leftHand, rightHand);
             }
         }
         else
         {
-            debugText.text = "Hand Tracking Subsystem Not Found!";
+            UpdateCountdownText("");
+            UpdateDebugText("Hand Tracking Subsystem Not Found!");
         }
     }
 
-    string GetFingerData(XRHand hand, string handName)
+    void CheckForClap(XRHand leftHand, XRHand rightHand)
     {
-        string data = "";
+        if (!leftHand.isTracked || !rightHand.isTracked) return;
 
-        // Ensure hand is tracked before accessing joints
-        if (!hand.isTracked)
-            return $"{handName} Hand not tracked.\n";
+        XRHandJoint leftPalm = leftHand.GetJoint(XRHandJointID.Palm);
+        XRHandJoint rightPalm = rightHand.GetJoint(XRHandJointID.Palm);
 
-        // Get valid joint range
-        int maxJointID = (int)XRHandJointID.LittleTip; // Highest valid joint ID
+        if (!leftPalm.TryGetPose(out Pose leftPose) || !rightPalm.TryGetPose(out Pose rightPose)) return;
 
-        for (int i = 0; i <= maxJointID; i++)
+        float distance = Vector3.Distance(leftPose.position, rightPose.position);
+
+        if (distance <= clapDistanceThreshold)
         {
-            XRHandJointID jointID = (XRHandJointID)i;
-
-            // Ensure jointID is within the correct range
-            if (jointID == XRHandJointID.Invalid || i < 0 || i > maxJointID)
-                continue;
-
-            XRHandJoint joint = hand.GetJoint(jointID);
-
-            if (joint != null && joint.TryGetPose(out Pose pose))
+            if (Time.time - lastClapTime > clapCooldown)
             {
-                data += $"{jointID}: {pose.position}\n";
+                Debug.Log("Clap detected!");
+                lastClapTime = Time.time;
+
+                UpdateCountdownText("Clap Detected!");
+                UpdateDebugText("");
+
+                StartCoroutine(WaitAndCollectSamples(3f));
             }
         }
-        return data;
     }
 
-    void SaveHandDataToCSV(XRHand leftHand, XRHand rightHand)
+    IEnumerator WaitAndCollectSamples(float waitTime)
     {
-        // Get the current time for this tracking data entry
-        string timeStamp = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        isWaitingForDataCollection = true;
 
-        // Save left hand data
+        // Whole second countdown before starting data collection
+        for (int secondsLeft = (int)waitTime; secondsLeft > 0; secondsLeft--)
+        {
+            UpdateCountdownText($"Starting in {secondsLeft}...");
+            yield return new WaitForSeconds(1f);
+        }
+
+        UpdateCountdownText("Starting data collection...");
+
+        XRHand leftHand = handSubsystem.leftHand;
+
         if (leftHand.isTracked)
         {
-            SaveHandDataToFile(leftHand, "Left", timeStamp);
+            clapIndex++;
+
+            TakeScreenshot(clapIndex);
+
+            yield return StartCoroutine(CollectSamples(leftHand));
+        }
+        else
+        {
+            Debug.Log("Left hand not tracked after delay.");
+            UpdateCountdownText("Left Hand Not Tracked After Delay!");
         }
 
-        // Save right hand data
-        if (rightHand.isTracked)
-        {
-            SaveHandDataToFile(rightHand, "Right", timeStamp);
-        }
+        UpdateCountdownText("Done!");
+
+        yield return new WaitForSeconds(2f);
+
+        UpdateCountdownText("Waiting for Clap...");
+        UpdateDebugText("");
+
+        isWaitingForDataCollection = false;
     }
 
-    void SaveHandDataToFile(XRHand hand, string handName, string timeStamp)
+    IEnumerator CollectSamples(XRHand hand)
     {
+        StringBuilder rowBuilder = new StringBuilder();
+
+        string timeStamp = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        rowBuilder.Append($"{clapIndex},{timeStamp},");
+
         int maxJointID = (int)XRHandJointID.LittleTip;
 
-        for (int i = 0; i <= maxJointID; i++)
+        float totalCollectionTime = numberOfSamples * sampleInterval;
+
+        for (int sample = 0; sample < numberOfSamples; sample++)
         {
-            XRHandJointID jointID = (XRHandJointID)i;
-
-            if (jointID == XRHandJointID.Invalid || i < 0 || i > maxJointID)
-                continue;
-
-            XRHandJoint joint = hand.GetJoint(jointID);
-
-            if (joint != null && joint.TryGetPose(out Pose pose))
+            if (sample > 0)
             {
-                string line = $"{timeStamp},{handName},{jointID},{pose.position.x},{pose.position.y},{pose.position.z}\n";
-                string filePath = Path.Combine(downloadsFolder, "hand_tracking_data.csv");
-                File.AppendAllText(filePath, line);
+                rowBuilder.Append("|"); // Separate sample blocks
             }
+
+            for (int i = 0; i <= maxJointID; i++)
+            {
+                XRHandJointID jointID = (XRHandJointID)i;
+
+                if (jointID == XRHandJointID.Invalid || i < 0 || i > maxJointID)
+                    continue;
+
+                XRHandJoint joint = hand.GetJoint(jointID);
+
+                if (joint != null && joint.TryGetPose(out Pose pose))
+                {
+                    rowBuilder.Append($"{jointID}-{pose.position.x:F4},{pose.position.y:F4},{pose.position.z:F4};");
+                }
+                else
+                {
+                    rowBuilder.Append($"{jointID}-NaN,NaN,NaN;");
+                }
+            }
+
+            UpdateDebugText($"Collecting Data...\nSamples Collected: {sample + 1}/{numberOfSamples}");
+
+            yield return new WaitForSeconds(sampleInterval);
+        }
+
+        rowBuilder.AppendLine(); // End of the entire row (after 100 samples)
+
+        File.AppendAllText(filePath, rowBuilder.ToString());
+
+        Debug.Log($"Saved {numberOfSamples} samples for clap {clapIndex}");
+
+        UpdateDebugText($"Data Collection Complete for Clap {clapIndex}!");
+    }
+
+    void TakeScreenshot(int index)
+    {
+        string screenshotFileName = $"screenshot_{index}.png";
+        string screenshotPath = Path.Combine(downloadsFolder, screenshotFileName);
+
+        ScreenCapture.CaptureScreenshot(screenshotPath);
+
+        Debug.Log($"Screenshot saved to: {screenshotPath}");
+
+        UpdateDebugText($"Screenshot Taken: {screenshotFileName}");
+    }
+
+    void UpdateCountdownText(string message)
+    {
+        if (countdownText != null)
+        {
+            countdownText.text = message;
         }
     }
 
-    void TakeScreenshot()
+    void UpdateDebugText(string message)
     {
-        // Define the screenshot filename in the Downloads folder
-        string screenshotPath = Path.Combine(downloadsFolder, "screenshot.png");
-
-        // Take screenshot
-        ScreenCapture.CaptureScreenshot(screenshotPath);
-        Debug.Log("Screenshot saved to: " + screenshotPath);
+        if (debugText != null)
+        {
+            debugText.text = message;
+        }
     }
 }
