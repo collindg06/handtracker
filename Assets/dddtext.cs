@@ -5,29 +5,37 @@ using UnityEngine.XR.Management;
 using System.IO;
 using System.Collections;
 using System.Text;
+using System.Collections.Generic;
 
 public class HandTrackingJoints : MonoBehaviour
 {
     [Header("UI Elements")]
-    public TextMeshProUGUI debugText;              // For hand tracking data/status
-    public TextMeshProUGUI countdownText;          // For countdown and progress display
+    public TextMeshProUGUI debugText;
+    public TextMeshProUGUI countdownText;
 
     private XRHandSubsystem handSubsystem;
     private string downloadsFolder;
     private string filePath;
 
     [Header("Clap Detection Settings")]
-    public float clapDistanceThreshold = 0.1f;     // Distance to consider a clap (meters)
-    public float clapCooldown = 2.0f;              // Cooldown time between claps (seconds)
+    public float clapDistanceThreshold = 0.1f;
+    public float clapCooldown = 2.0f;
 
     private bool isWaitingForDataCollection = false;
     private float lastClapTime = -Mathf.Infinity;
 
     [Header("Sampling Settings")]
-    public int numberOfSamples = 100;              // How many samples to collect after clap
-    public float sampleInterval = 0.2f;            // Interval between samples (now 0.2s)
+    public int numberOfSamples = 100;
+    public float sampleInterval = 0.2f;  // <-- Set to 0.2 seconds as requested!
 
     private int clapIndex = 0;
+
+    private readonly List<string> gestureList = new List<string>
+    {
+        "left", "up", "right", "down", "backwards", "forward", "turn left", "turn right"
+    };
+
+    private List<string> jointHeaders = new List<string>();
 
     void Start()
     {
@@ -53,8 +61,12 @@ public class HandTrackingJoints : MonoBehaviour
             Debug.Log("Existing CSV file deleted.");
         }
 
+        // Initialize joint headers (Wrist_X, Wrist_Y, Wrist_Z, etc.)
+        GenerateJointHeaders();
+
         // Create a new CSV file with headers
-        File.WriteAllText(filePath, "ClapIndex,TimeStamp,Data\n");
+        string headerLine = $"ClapIndex,TimeStamp,Gesture,SampleNumber,{string.Join(",", jointHeaders)}\n";
+        File.WriteAllText(filePath, headerLine);
 
         UpdateCountdownText("Waiting for Clap...");
         UpdateDebugText("");
@@ -115,7 +127,7 @@ public class HandTrackingJoints : MonoBehaviour
     {
         isWaitingForDataCollection = true;
 
-        // Whole second countdown before starting data collection
+        // First countdown BEFORE starting collection
         for (int secondsLeft = (int)waitTime; secondsLeft > 0; secondsLeft--)
         {
             UpdateCountdownText($"Starting in {secondsLeft}...");
@@ -129,10 +141,11 @@ public class HandTrackingJoints : MonoBehaviour
         if (leftHand.isTracked)
         {
             clapIndex++;
+            string gesture = GetGestureForClap(clapIndex);
 
             TakeScreenshot(clapIndex);
 
-            yield return StartCoroutine(CollectSamples(leftHand));
+            yield return StartCoroutine(CollectSamples(leftHand, gesture));
         }
         else
         {
@@ -150,23 +163,18 @@ public class HandTrackingJoints : MonoBehaviour
         isWaitingForDataCollection = false;
     }
 
-    IEnumerator CollectSamples(XRHand hand)
+    IEnumerator CollectSamples(XRHand hand, string gesture)
     {
-        StringBuilder rowBuilder = new StringBuilder();
-
-        string timeStamp = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-        rowBuilder.Append($"{clapIndex},{timeStamp},");
-
         int maxJointID = (int)XRHandJointID.LittleTip;
 
-        float totalCollectionTime = numberOfSamples * sampleInterval;
+        string timeStamp = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
         for (int sample = 0; sample < numberOfSamples; sample++)
         {
-            if (sample > 0)
-            {
-                rowBuilder.Append("|"); // Separate sample blocks
-            }
+            StringBuilder rowBuilder = new StringBuilder();
+            rowBuilder.Append($"{clapIndex},{timeStamp},{gesture},{sample + 1},");
+
+            List<string> jointValues = new List<string>();
 
             for (int i = 0; i <= maxJointID; i++)
             {
@@ -179,22 +187,27 @@ public class HandTrackingJoints : MonoBehaviour
 
                 if (joint != null && joint.TryGetPose(out Pose pose))
                 {
-                    rowBuilder.Append($"{jointID}-{pose.position.x:F4},{pose.position.y:F4},{pose.position.z:F4};");
+                    jointValues.Add($"{pose.position.x:F4}");
+                    jointValues.Add($"{pose.position.y:F4}");
+                    jointValues.Add($"{pose.position.z:F4}");
                 }
                 else
                 {
-                    rowBuilder.Append($"{jointID}-NaN,NaN,NaN;");
+                    jointValues.Add("NaN");
+                    jointValues.Add("NaN");
+                    jointValues.Add("NaN");
                 }
             }
 
+            rowBuilder.Append(string.Join(",", jointValues));
+            rowBuilder.AppendLine();
+
+            File.AppendAllText(filePath, rowBuilder.ToString());
+
             UpdateDebugText($"Collecting Data...\nSamples Collected: {sample + 1}/{numberOfSamples}");
 
-            yield return new WaitForSeconds(sampleInterval);
+            yield return new WaitForSeconds(sampleInterval); // 0.2 seconds per your request
         }
-
-        rowBuilder.AppendLine(); // End of the entire row (after 100 samples)
-
-        File.AppendAllText(filePath, rowBuilder.ToString());
 
         Debug.Log($"Saved {numberOfSamples} samples for clap {clapIndex}");
 
@@ -227,5 +240,33 @@ public class HandTrackingJoints : MonoBehaviour
         {
             debugText.text = message;
         }
+    }
+
+    void GenerateJointHeaders()
+    {
+        int maxJointID = (int)XRHandJointID.LittleTip;
+
+        for (int i = 0; i <= maxJointID; i++)
+        {
+            XRHandJointID jointID = (XRHandJointID)i;
+
+            if (jointID == XRHandJointID.Invalid || i < 0 || i > maxJointID)
+                continue;
+
+            string jointName = jointID.ToString();
+            jointHeaders.Add($"{jointName}_X");
+            jointHeaders.Add($"{jointName}_Y");
+            jointHeaders.Add($"{jointName}_Z");
+        }
+    }
+
+    string GetGestureForClap(int index)
+    {
+        if (gestureList.Count == 0)
+            return "Unknown";
+
+        // Wrap around the gesture list if more claps than gestures
+        int gestureIndex = (index - 1) % gestureList.Count;
+        return gestureList[gestureIndex];
     }
 }

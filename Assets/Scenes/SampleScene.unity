@@ -678,7 +678,7 @@ MonoBehaviour:
   clapDistanceThreshold: 0.1
   clapCooldown: 2
   numberOfSamples: 100
-  sampleInterval: 0.02
+  sampleInterval: 0.2
 --- !u!4 &1702770367
 Transform:
   m_ObjectHideFlags: 0
