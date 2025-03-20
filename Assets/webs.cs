@@ -3,8 +3,12 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Text;
-
+using System.Net;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using NativeWebSocket;
+
+
 
 public class Connection : MonoBehaviour
 {
@@ -13,8 +17,10 @@ public class Connection : MonoBehaviour
   // Start is called before the first frame update
   async void Start()
   {
+    ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
     //websocket = new WebSocket("wss://service.zenimotion.com/nats");
-    websocket = new WebSocket("wss://echo.websocket.org");
+    //websocket = new WebSocket("wss://echo.websocket.org");
+    websocket = new WebSocket("ws://134.209.218.187:8081/nats");
 
     websocket.OnOpen += () =>
     {
