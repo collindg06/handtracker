@@ -1,4 +1,4 @@
-using UnityEngine;
+using UnityEngine; 
 using TMPro;
 using UnityEngine.XR.Hands;
 using UnityEngine.XR.Management;
@@ -26,7 +26,7 @@ public class HandTrackingJoints : MonoBehaviour
 
     [Header("Sampling Settings")]
     public int numberOfSamples = 100;
-    public float sampleInterval = 0.2f;  // <-- Set to 0.2 seconds as requested!
+    public float sampleInterval = 0.2f;
 
     private int clapIndex = 0;
 
@@ -54,17 +54,14 @@ public class HandTrackingJoints : MonoBehaviour
 
         filePath = Path.Combine(downloadsFolder, "hand_tracking_data.csv");
 
-        // DELETE existing CSV file if it exists
         if (File.Exists(filePath))
         {
             File.Delete(filePath);
             Debug.Log("Existing CSV file deleted.");
         }
 
-        // Initialize joint headers (Wrist_X, Wrist_Y, Wrist_Z, etc.)
         GenerateJointHeaders();
 
-        // Create a new CSV file with headers
         string headerLine = $"ClapIndex,TimeStamp,Gesture,SampleNumber,{string.Join(",", jointHeaders)}\n";
         File.WriteAllText(filePath, headerLine);
 
@@ -127,7 +124,6 @@ public class HandTrackingJoints : MonoBehaviour
     {
         isWaitingForDataCollection = true;
 
-        // First countdown BEFORE starting collection
         for (int secondsLeft = (int)waitTime; secondsLeft > 0; secondsLeft--)
         {
             UpdateCountdownText($"Starting in {secondsLeft}...");
@@ -143,7 +139,8 @@ public class HandTrackingJoints : MonoBehaviour
             clapIndex++;
             string gesture = GetGestureForClap(clapIndex);
 
-            TakeScreenshot(clapIndex);
+            // No longer taking one screenshot here!
+            // Screenshot now happens in CollectSamples instead.
 
             yield return StartCoroutine(CollectSamples(leftHand, gesture));
         }
@@ -166,7 +163,6 @@ public class HandTrackingJoints : MonoBehaviour
     IEnumerator CollectSamples(XRHand hand, string gesture)
     {
         int maxJointID = (int)XRHandJointID.LittleTip;
-
         string timeStamp = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
         for (int sample = 0; sample < numberOfSamples; sample++)
@@ -204,9 +200,12 @@ public class HandTrackingJoints : MonoBehaviour
 
             File.AppendAllText(filePath, rowBuilder.ToString());
 
+            // NEW: Take a screenshot for each sample!
+            TakeScreenshot(clapIndex, sample + 1);
+
             UpdateDebugText($"Collecting Data...\nSamples Collected: {sample + 1}/{numberOfSamples}");
 
-            yield return new WaitForSeconds(sampleInterval); // 0.2 seconds per your request
+            yield return new WaitForSeconds(sampleInterval);
         }
 
         Debug.Log($"Saved {numberOfSamples} samples for clap {clapIndex}");
@@ -214,9 +213,10 @@ public class HandTrackingJoints : MonoBehaviour
         UpdateDebugText($"Data Collection Complete for Clap {clapIndex}!");
     }
 
-    void TakeScreenshot(int index)
+    // UPDATED: Screenshot method now includes sample index
+    void TakeScreenshot(int clapIndex, int sampleIndex)
     {
-        string screenshotFileName = $"screenshot_{index}.png";
+        string screenshotFileName = $"clap_{clapIndex}_sample_{sampleIndex}.png";
         string screenshotPath = Path.Combine(downloadsFolder, screenshotFileName);
 
         ScreenCapture.CaptureScreenshot(screenshotPath);
@@ -265,7 +265,6 @@ public class HandTrackingJoints : MonoBehaviour
         if (gestureList.Count == 0)
             return "Unknown";
 
-        // Wrap around the gesture list if more claps than gestures
         int gestureIndex = (index - 1) % gestureList.Count;
         return gestureList[gestureIndex];
     }

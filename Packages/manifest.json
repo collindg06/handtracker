@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.endel.nativewebsocket": "https://github.com/endel/NativeWebSocket.git#upm",
     "com.meta.xr.sdk.interaction": "72.0.0",
     "com.meta.xr.simulator": "72.0.0",
     "com.unity.ai.navigation": "2.0.6",
