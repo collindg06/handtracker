@@ -674,6 +674,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2a41c6bc7953a344ea857c3e96033466, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  connection: {fileID: 1702770368}
   debugText: {fileID: 888665379}
   countdownText: {fileID: 0}
   clapDistanceThreshold: 0.1

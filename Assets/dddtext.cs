@@ -1,3 +1,4 @@
+using System;
 using UnityEngine; 
 using TMPro;
 using UnityEngine.XR.Hands;
@@ -7,8 +8,13 @@ using System.Collections;
 using System.Text;
 using System.Collections.Generic;
 
+
+
 public class HandTrackingJoints : MonoBehaviour
 {
+
+    public Connection connection;  // new
+
     [Header("UI Elements")]
     public TextMeshProUGUI debugText;
     public TextMeshProUGUI countdownText;
@@ -119,6 +125,31 @@ public class HandTrackingJoints : MonoBehaviour
             }
         }
     }
+    [System.Serializable]
+    public class JointData
+    {
+    public float x;
+    public float y;
+    public float z;
+
+    public JointData(float x, float y, float z)
+    {
+        this.x = (float)System.Math.Round(x, 2);
+        this.y = (float)System.Math.Round(y, 2);
+        this.z = (float)System.Math.Round(z, 2);
+    }
+    }
+    
+    [System.Serializable]
+    public class SampleData
+    {
+    public int clapIndex;
+    public string timestamp;
+    public string gesture;
+    public int sampleNumber;
+    public Dictionary<string, JointData> jointData = new Dictionary<string, JointData>();
+    }
+
 
     IEnumerator WaitAndCollectSamples(float waitTime)
     {
@@ -167,11 +198,15 @@ public class HandTrackingJoints : MonoBehaviour
 
         for (int sample = 0; sample < numberOfSamples; sample++)
         {
-            StringBuilder rowBuilder = new StringBuilder();
-            rowBuilder.Append($"{clapIndex},{timeStamp},{gesture},{sample + 1},");
+            Dictionary<string, object> jointData = new Dictionary<string, object>
+            {
+                { "clapIndex", clapIndex },
+                { "timestamp", timeStamp },
+                { "gesture", gesture },
+                { "sampleNumber", sample + 1 }
+            };
 
-            List<string> jointValues = new List<string>();
-
+            // Collect joint data
             for (int i = 0; i <= maxJointID; i++)
             {
                 XRHandJointID jointID = (XRHandJointID)i;
@@ -183,22 +218,33 @@ public class HandTrackingJoints : MonoBehaviour
 
                 if (joint != null && joint.TryGetPose(out Pose pose))
                 {
-                    jointValues.Add($"{pose.position.x:F4}");
-                    jointValues.Add($"{pose.position.y:F4}");
-                    jointValues.Add($"{pose.position.z:F4}");
+                    // Include joint names before the data, rounded to 2 decimal places
+                    jointData[$"{jointID}_X"] = Math.Round(pose.position.x, 2);
+                    jointData[$"{jointID}_Y"] = Math.Round(pose.position.y, 2);
+                    jointData[$"{jointID}_Z"] = Math.Round(pose.position.z, 2);
                 }
                 else
                 {
-                    jointValues.Add("NaN");
-                    jointValues.Add("NaN");
-                    jointValues.Add("NaN");
+                    jointData[$"{jointID}_X"] = "NaN";
+                    jointData[$"{jointID}_Y"] = "NaN";
+                    jointData[$"{jointID}_Z"] = "NaN";
                 }
             }
 
-            rowBuilder.Append(string.Join(",", jointValues));
-            rowBuilder.AppendLine();
+            // Convert to JSON string
+            string jsonMessage = Newtonsoft.Json.JsonConvert.SerializeObject(jointData);
 
-            File.AppendAllText(filePath, rowBuilder.ToString());
+
+            // Create the PUB message
+            //string pubMessage = $"PUB hand.jointData {Encoding.UTF8.GetByteCount(jsonMessage)}\r\n{jsonMessage}\r\n";
+
+            //Debug.Log($"Sending: {pubMessage}");
+
+            // Send the JSON message via WebSocket
+            if (connection != null)
+            {
+                connection.SendHandData("hand.jointData", jsonMessage);
+            }
 
             // NEW: Take a screenshot for each sample!
             TakeScreenshot(clapIndex, sample + 1);
@@ -213,6 +259,27 @@ public class HandTrackingJoints : MonoBehaviour
         UpdateDebugText($"Data Collection Complete for Clap {clapIndex}!");
     }
 
+
+    void SaveSampleToCSV(SampleData sample)
+    {
+        StringBuilder rowBuilder = new StringBuilder();
+
+        rowBuilder.Append($"{sample.clapIndex},{sample.timestamp},{sample.gesture},{sample.sampleNumber},");
+
+        List<string> jointValues = new List<string>();
+
+        foreach (var joint in sample.jointData)
+        {
+            jointValues.Add($"{joint.Value.x:F4}");
+            jointValues.Add($"{joint.Value.y:F4}");
+            jointValues.Add($"{joint.Value.z:F4}");
+        }
+
+        rowBuilder.Append(string.Join(",", jointValues));
+        rowBuilder.AppendLine();
+
+        File.AppendAllText(filePath, rowBuilder.ToString());
+    }
     // UPDATED: Screenshot method now includes sample index
     void TakeScreenshot(int clapIndex, int sampleIndex)
     {
