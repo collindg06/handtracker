@@ -1,5 +1,5 @@
 using System;
-using UnityEngine; 
+using UnityEngine;
 using TMPro;
 using UnityEngine.XR.Hands;
 using UnityEngine.XR.Management;
@@ -7,6 +7,7 @@ using System.IO;
 using System.Collections;
 using System.Text;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 
 
@@ -20,7 +21,7 @@ public class HandTrackingJoints : MonoBehaviour
     public TextMeshProUGUI countdownText;
 
     private XRHandSubsystem handSubsystem;
-    private string downloadsFolder;
+    //private string downloadsFolder;
     private string filePath;
 
     [Header("Clap Detection Settings")]
@@ -38,28 +39,32 @@ public class HandTrackingJoints : MonoBehaviour
 
     private readonly List<string> gestureList = new List<string>
     {
-        "left", "up", "right", "down", "backwards", "forward", "turn left", "turn right"
+        "palm open", "thumb", "index", "middle", "ring", "pinky", "palm closed"
     };
+
 
     private List<string> jointHeaders = new List<string>();
 
     void Start()
     {
+        clapIndex = 0;
         var loader = XRGeneralSettings.Instance?.Manager?.activeLoader;
         if (loader != null)
         {
             handSubsystem = loader.GetLoadedSubsystem<XRHandSubsystem>();
         }
 
-        downloadsFolder = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile), "Downloads");
+        //downloadsFolder = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile), "Downloads", "palms");
 
-        if (!Directory.Exists(downloadsFolder))
-        {
-            Directory.CreateDirectory(downloadsFolder);
-        }
 
-        filePath = Path.Combine(downloadsFolder, "hand_tracking_data.csv");
+        //if (!Directory.Exists(downloadsFolder))
+       // {
+        //    Directory.CreateDirectory(downloadsFolder);
+       // }
 
+Debug.Log("\n \n \n Start here \n \n \n");
+        filePath = Path.Combine(Application.persistentDataPath, "hand_tracking_data.csv");
+        Debug.Log("xxxxx filepath " + filePath.ToString());
         if (File.Exists(filePath))
         {
             File.Delete(filePath);
@@ -128,26 +133,26 @@ public class HandTrackingJoints : MonoBehaviour
     [System.Serializable]
     public class JointData
     {
-    public float x;
-    public float y;
-    public float z;
+        public float x;
+        public float y;
+        public float z;
 
-    public JointData(float x, float y, float z)
-    {
-        this.x = (float)System.Math.Round(x, 2);
-        this.y = (float)System.Math.Round(y, 2);
-        this.z = (float)System.Math.Round(z, 2);
+        public JointData(float x, float y, float z)
+        {
+            this.x = (float)System.Math.Round(x, 2);
+            this.y = (float)System.Math.Round(y, 2);
+            this.z = (float)System.Math.Round(z, 2);
+        }
     }
-    }
-    
+
     [System.Serializable]
     public class SampleData
     {
-    public int clapIndex;
-    public string timestamp;
-    public string gesture;
-    public int sampleNumber;
-    public Dictionary<string, JointData> jointData = new Dictionary<string, JointData>();
+        public int clapIndex;
+        public string timestamp;
+        public string gesture;
+        public int sampleNumber;
+        public Dictionary<string, JointData> jointData = new Dictionary<string, JointData>();
     }
 
 
@@ -167,11 +172,8 @@ public class HandTrackingJoints : MonoBehaviour
 
         if (leftHand.isTracked)
         {
-            clapIndex++;
             string gesture = GetGestureForClap(clapIndex);
-
-            // No longer taking one screenshot here!
-            // Screenshot now happens in CollectSamples instead.
+            clapIndex++;
 
             yield return StartCoroutine(CollectSamples(leftHand, gesture));
         }
@@ -230,9 +232,51 @@ public class HandTrackingJoints : MonoBehaviour
                     jointData[$"{jointID}_Z"] = "NaN";
                 }
             }
+            // Create a SampleData object
+            SampleData sampleData = new SampleData
+            {
+                clapIndex = clapIndex,
+                timestamp = timeStamp,
+                gesture = gesture,
+                sampleNumber = sample + 1
+            };
+
+            // Populate jointData in SampleData object
+            foreach (var joint in jointData)
+            {
+                // The joint name is already part of the key (e.g., "JointName_X")
+                if (joint.Key.EndsWith("_X"))
+                {
+                    string jointName = joint.Key.Split('_')[0];  // Extract the joint name
+                    float x = Convert.ToSingle(jointData[$"{jointName}_X"]);
+                    float y = Convert.ToSingle(jointData[$"{jointName}_Y"]);
+                    float z = Convert.ToSingle(jointData[$"{jointName}_Z"]);
+
+                    // Store the joint data using the joint name
+                    sampleData.jointData[jointName] = new JointData(x, y, z);
+                }
+            }
+
+
+            // Save sample data to CSV
+            SaveSampleToCSV(sampleData);
+
 
             // Convert to JSON string
-            string jsonMessage = Newtonsoft.Json.JsonConvert.SerializeObject(jointData);
+            string jsonMessage = JsonConvert.SerializeObject(jointData, Newtonsoft.Json.Formatting.Indented);
+
+
+
+            // Define JSON file path
+            string jsonFileName = $"{gesture}_sample_{sample + 1}.json";
+            string jsonFilePath = Path.Combine( $"{gesture}_sample_{sample + 1}.json");
+
+
+            // Save JSON data to a file
+            File.WriteAllText(jsonFilePath, jsonMessage);
+
+            Debug.Log($"JSON saved to: {jsonFilePath}");
+
 
 
             // Create the PUB message
@@ -247,7 +291,7 @@ public class HandTrackingJoints : MonoBehaviour
             }
 
             // NEW: Take a screenshot for each sample!
-            TakeScreenshot(clapIndex, sample + 1);
+            TakeScreenshot(gesture, sample + 1);
 
             UpdateDebugText($"Collecting Data...\nSamples Collected: {sample + 1}/{numberOfSamples}");
 
@@ -280,11 +324,10 @@ public class HandTrackingJoints : MonoBehaviour
 
         File.AppendAllText(filePath, rowBuilder.ToString());
     }
-    // UPDATED: Screenshot method now includes sample index
-    void TakeScreenshot(int clapIndex, int sampleIndex)
+    void TakeScreenshot(string gesture, int sampleIndex)
     {
-        string screenshotFileName = $"clap_{clapIndex}_sample_{sampleIndex}.png";
-        string screenshotPath = Path.Combine(downloadsFolder, screenshotFileName);
+        string screenshotFileName = $"{gesture}_sample_{sampleIndex}.png";
+        string screenshotPath = Path.Combine(screenshotFileName);
 
         ScreenCapture.CaptureScreenshot(screenshotPath);
 
@@ -329,10 +372,11 @@ public class HandTrackingJoints : MonoBehaviour
 
     string GetGestureForClap(int index)
     {
-        if (gestureList.Count == 0)
+        if (gestureList == null || gestureList.Count == 0)
             return "Unknown";
 
-        int gestureIndex = (index - 1) % gestureList.Count;
-        return gestureList[gestureIndex];
+        int safeIndex = index % gestureList.Count;
+        return gestureList[safeIndex];
     }
+
 }
