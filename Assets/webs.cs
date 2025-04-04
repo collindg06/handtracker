@@ -62,7 +62,7 @@ public class Connection : MonoBehaviour
 
     websocket.OnMessage += (bytes) =>
     {
-      Debug.Log("OnMessage!");
+      Debug.Log("Received OnMessage!");
       //Debug.Log(bytes);
       string message = Encoding.UTF8.GetString(bytes); //new
       Debug.Log($"Received: {message}"); //new
@@ -88,15 +88,17 @@ public class Connection : MonoBehaviour
 
   async void SendWebSocketMessage()
   {
-    byte[] messageBytes = Encoding.UTF8.GetBytes("PUB test.subject 5\r\nHello\r\n");
-    Debug.Log("Number of bytes: " + messageBytes.Length);
+    string msg_str = "PUB subject.pose 5\r\nHello\r\n";
+    byte[] messageBytes = Encoding.UTF8.GetBytes(msg_str);
+    
     if (websocket.State == WebSocketState.Open)
     {
        //Sending bytes
       //await websocket.Send(new byte[] { 10, 20, 30 });
 
       // Sending plain text
-      await websocket.SendText("PUB subject.pose 5\r\nHello\r\n");
+      Debug.Log("Sending: Number of bytes: " + messageBytes.Length);
+      await websocket.SendText(msg_str);
       
       //await websocket.SendText(“PUB jointValues xxx\r\nyyy\r\n”);
     }
