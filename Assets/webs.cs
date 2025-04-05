@@ -40,10 +40,10 @@ public class Connection : MonoBehaviour
   {
     Debug.Log("Starting Connection script on " + gameObject.name);
     ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
-    websocket = new WebSocket("wss://service.zenimotion.com/nats");
+    //websocket = new WebSocket("wss://service.zenimotion.com/nats");
     //websocket = new WebSocket("wss://echo.websocket.org");
-    //websocket = new WebSocket("ws://134.209.218.187:8081/nats");
-
+    websocket = new WebSocket("ws://134.209.218.187:8081/nats");
+Debug.Log("about open!");
     websocket.OnOpen += () =>
     {
       Debug.Log("Connection open!");
@@ -73,8 +73,10 @@ public class Connection : MonoBehaviour
 
     // Keep sending messages at every 0.3s
     InvokeRepeating("SendWebSocketMessage", 0.0f, 0.3f);
+    Debug.Log("before calling Connect!");
     // waiting for messages
     await websocket.Connect();
+    Debug.Log("after calling Connect!");
     
 
   }
@@ -90,6 +92,7 @@ public class Connection : MonoBehaviour
   {
     string msg_str = "PUB subject.pose 5\r\nHello\r\n";
     byte[] messageBytes = Encoding.UTF8.GetBytes(msg_str);
+    Debug.Log("inside SendWebSocketMessage (timer trigged)!");
     
     if (websocket.State == WebSocketState.Open)
     {
@@ -106,6 +109,7 @@ public class Connection : MonoBehaviour
 
   private async void OnApplicationQuit()
   {
+    Debug.Log("\n \n \n end here \n \n \n");
     await websocket.Close();
   }
 

@@ -21,7 +21,7 @@ public class HandTrackingJoints : MonoBehaviour
     public TextMeshProUGUI countdownText;
 
     private XRHandSubsystem handSubsystem;
-    private string downloadsFolder;
+    //private string downloadsFolder;
     private string filePath;
 
     [Header("Clap Detection Settings")]
@@ -54,16 +54,17 @@ public class HandTrackingJoints : MonoBehaviour
             handSubsystem = loader.GetLoadedSubsystem<XRHandSubsystem>();
         }
 
-        downloadsFolder = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile), "Downloads", "palms");
+        //downloadsFolder = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile), "Downloads", "palms");
 
 
-        if (!Directory.Exists(downloadsFolder))
-        {
-            Directory.CreateDirectory(downloadsFolder);
-        }
+        //if (!Directory.Exists(downloadsFolder))
+       // {
+        //    Directory.CreateDirectory(downloadsFolder);
+       // }
 
-        filePath = Path.Combine(downloadsFolder, "hand_tracking_data.csv");
-
+Debug.Log("\n \n \n Start here \n \n \n");
+        filePath = Path.Combine(Application.persistentDataPath, "hand_tracking_data.csv");
+        Debug.Log("xxxxx filepath " + filePath.ToString());
         if (File.Exists(filePath))
         {
             File.Delete(filePath);
@@ -268,7 +269,7 @@ public class HandTrackingJoints : MonoBehaviour
 
             // Define JSON file path
             string jsonFileName = $"{gesture}_sample_{sample + 1}.json";
-            string jsonFilePath = Path.Combine(downloadsFolder, $"{gesture}_sample_{sample + 1}.json");
+            string jsonFilePath = Path.Combine( $"{gesture}_sample_{sample + 1}.json");
 
 
             // Save JSON data to a file
@@ -326,7 +327,7 @@ public class HandTrackingJoints : MonoBehaviour
     void TakeScreenshot(string gesture, int sampleIndex)
     {
         string screenshotFileName = $"{gesture}_sample_{sampleIndex}.png";
-        string screenshotPath = Path.Combine(downloadsFolder, screenshotFileName);
+        string screenshotPath = Path.Combine(screenshotFileName);
 
         ScreenCapture.CaptureScreenshot(screenshotPath);
 
