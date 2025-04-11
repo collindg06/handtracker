@@ -280,9 +280,9 @@ Debug.Log("\n \n \n Start here \n \n \n");
 
 
             // Create the PUB message
-            //string pubMessage = $"PUB hand.jointData {Encoding.UTF8.GetByteCount(jsonMessage)}\r\n{jsonMessage}\r\n";
+            string pubMessage = $"PUB hand.jointData {Encoding.UTF8.GetByteCount(jsonMessage)}\r\n{jsonMessage}\r\n";
 
-            //Debug.Log($"Sending: {pubMessage}");
+            Debug.Log($"Sending: {pubMessage}");
 
             // Send the JSON message via WebSocket
             if (connection != null)

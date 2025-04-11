@@ -42,7 +42,7 @@ public class Connection : MonoBehaviour
   {
     Debug.Log("Starting Connection script on " + gameObject.name);
     ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
-<<<<<<< HEAD
+
     //ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) =>
     //{
     //Debug.Log($"Certificate subject: {certificate.Subject}");
@@ -53,12 +53,7 @@ public class Connection : MonoBehaviour
     //websocket = new WebSocket("wss://echo.websocket.org");
     //websocket = new WebSocket("ws://134.209.218.187:8081/nats");
     Debug.Log("about open!");
-=======
-    websocket = new WebSocket("wss://service.zenimotion.com/nats");
-    //websocket = new WebSocket("wss://echo.websocket.org");
-    //websocket = new WebSocket("ws://134.209.218.187:8081/nats");
-Debug.Log("about open!");
->>>>>>> 6a627f4c997cb4ea499cd21714a4f3e1b52d0c1e
+
     websocket.OnOpen += () =>
     {
       Debug.Log("Connection open!");
@@ -90,7 +85,7 @@ Debug.Log("about open!");
     InvokeRepeating("SendWebSocketMessage", 0.0f, 0.3f);
     Debug.Log("before calling Connect!");
     // waiting for messages
-<<<<<<< HEAD
+
     Debug.Log("Before calling Connect...");
 
     //try
@@ -126,20 +121,8 @@ Debug.Log("about open!");
     //}
     //}
 
-=======
-    try
-{
->>>>>>> 6a627f4c997cb4ea499cd21714a4f3e1b52d0c1e
-    await websocket.Connect();
-    await Task.Delay(3000);
-    Debug.Log("WebSocket connected successfully.");
-}
-catch (Exception ex)
-{
-    Debug.LogError($"WebSocket Connect() failed: {ex.Message}\n{ex.StackTrace}");
-}
 
-    //await websocket.Connect();
+    await websocket.Connect();
     Debug.Log("after calling Connect!");
 
 
