@@ -269,11 +269,9 @@ Debug.Log("\n \n \n Start here \n \n \n");
 
             // Define JSON file path
             string jsonFileName = $"{gesture}_sample_{sample + 1}.json";
-            string jsonFilePath = Path.Combine( $"{gesture}_sample_{sample + 1}.json");
+            string jsonFilePath = Path.Combine(Application.persistentDataPath, $"{gesture}_sample_{sample + 1}.json");
+File.WriteAllText(jsonFilePath, jsonMessage);
 
-
-            // Save JSON data to a file
-            File.WriteAllText(jsonFilePath, jsonMessage);
 
             Debug.Log($"JSON saved to: {jsonFilePath}");
 
